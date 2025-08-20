@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<!-- saved from url=(0035)https://lab-micropython.arduino.cc/ -->
+<html lang="en" dir="ltr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style>.ͼ1.cm-focused {outline: 1px dotted #212121;}
+.ͼ1 {position: relative !important; box-sizing: border-box; display: flex !important; flex-direction: column;}
+.ͼ1 .cm-scroller {display: flex !important; align-items: flex-start !important; font-family: monospace; line-height: 1.4; height: 100%; overflow-x: auto; position: relative; z-index: 0;}
+.ͼ1 .cm-content[contenteditable=true] {-webkit-user-modify: read-write-plaintext-only;}
+.ͼ1 .cm-content {margin: 0; flex-grow: 2; flex-shrink: 0; display: block; white-space: pre; word-wrap: normal; box-sizing: border-box; min-height: 100%; padding: 4px 0; outline: none;}
+.ͼ1 .cm-lineWrapping {white-space: pre-wrap; white-space: break-spaces; word-break: break-word; overflow-wrap: anywhere; flex-shrink: 1;}
+.ͼ2 .cm-content {caret-color: black;}
+.ͼ3 .cm-content {caret-color: white;}
+.ͼ1 .cm-line {display: block; padding: 0 2px 0 6px;}
+.ͼ1 .cm-layer > * {position: absolute;}
+.ͼ1 .cm-layer {position: absolute; left: 0; top: 0; contain: size style;}
+.ͼ2 .cm-selectionBackground {background: #d9d9d9;}
+.ͼ3 .cm-selectionBackground {background: #222;}
+.ͼ2.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {background: #d7d4f0;}
+.ͼ3.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {background: #233;}
+.ͼ1 .cm-cursorLayer {pointer-events: none;}
+.ͼ1.cm-focused > .cm-scroller > .cm-cursorLayer {animation: steps(1) cm-blink 1.2s infinite;}
+@keyframes cm-blink {50% {opacity: 0;}}
+@keyframes cm-blink2 {50% {opacity: 0;}}
+.ͼ1 .cm-cursor, .ͼ1 .cm-dropCursor {border-left: 1.2px solid black; margin-left: -0.6px; pointer-events: none;}
+.ͼ1 .cm-cursor {display: none;}
+.ͼ3 .cm-cursor {border-left-color: #444;}
+.ͼ1 .cm-dropCursor {position: absolute;}
+.ͼ1.cm-focused > .cm-scroller > .cm-cursorLayer .cm-cursor {display: block;}
+.ͼ2 .cm-activeLine {background-color: #cceeff44;}
+.ͼ3 .cm-activeLine {background-color: #99eeff33;}
+.ͼ2 .cm-specialChar {color: red;}
+.ͼ3 .cm-specialChar {color: #f78;}
+.ͼ1 .cm-gutters {flex-shrink: 0; display: flex; height: 100%; box-sizing: border-box; inset-inline-start: 0; z-index: 200;}
+.ͼ2 .cm-gutters {background-color: #f5f5f5; color: #6c6c6c; border-right: 1px solid #ddd;}
+.ͼ3 .cm-gutters {background-color: #333338; color: #ccc;}
+.ͼ1 .cm-gutter {display: flex !important; flex-direction: column; flex-shrink: 0; box-sizing: border-box; min-height: 100%; overflow: hidden;}
+.ͼ1 .cm-gutterElement {box-sizing: border-box;}
+.ͼ1 .cm-lineNumbers .cm-gutterElement {padding: 0 3px 0 5px; min-width: 20px; text-align: right; white-space: nowrap;}
+.ͼ2 .cm-activeLineGutter {background-color: #e2f2ff;}
+.ͼ3 .cm-activeLineGutter {background-color: #222227;}
+.ͼ1 .cm-panels {box-sizing: border-box; position: sticky; left: 0; right: 0;}
+.ͼ2 .cm-panels {background-color: #f5f5f5; color: black;}
+.ͼ2 .cm-panels-top {border-bottom: 1px solid #ddd;}
+.ͼ2 .cm-panels-bottom {border-top: 1px solid #ddd;}
+.ͼ3 .cm-panels {background-color: #333338; color: white;}
+.ͼ1 .cm-tab {display: inline-block; overflow: hidden; vertical-align: bottom;}
+.ͼ1 .cm-widgetBuffer {vertical-align: text-top; height: 1em; width: 0; display: inline;}
+.ͼ1 .cm-placeholder {color: #888; display: inline-block; vertical-align: top;}
+.ͼ1 .cm-highlightSpace:before {content: attr(data-display); position: absolute; pointer-events: none; color: #888;}
+.ͼ1 .cm-highlightTab {background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="20"><path stroke="%23888" stroke-width="1" fill="none" d="M1 10H196L190 5M190 15L196 10M197 4L197 16"/></svg>'); background-size: auto 100%; background-position: right 90%; background-repeat: no-repeat;}
+.ͼ1 .cm-trailingSpace {background-color: #ff332255;}
+.ͼ1 .cm-button {vertical-align: middle; color: inherit; font-size: 70%; padding: .2em 1em; border-radius: 1px;}
+.ͼ2 .cm-button:active {background-image: linear-gradient(#b4b4b4, #d0d3d6);}
+.ͼ2 .cm-button {background-image: linear-gradient(#eff1f5, #d9d9df); border: 1px solid #888;}
+.ͼ3 .cm-button:active {background-image: linear-gradient(#111, #333);}
+.ͼ3 .cm-button {background-image: linear-gradient(#393939, #111); border: 1px solid #888;}
+.ͼ1 .cm-textfield {vertical-align: middle; color: inherit; font-size: 70%; border: 1px solid silver; padding: .2em .5em;}
+.ͼ2 .cm-textfield {background-color: white;}
+.ͼ3 .cm-textfield {border: 1px solid #555; background-color: inherit;}
+.ͼ1 .cm-selectionMatch {background-color: #99ff7780;}
+.ͼ1 .cm-searchMatch .cm-selectionMatch {background-color: transparent;}
+.ͼ1 .cm-tooltip.cm-tooltip-autocomplete > ul > li, .ͼ1 .cm-tooltip.cm-tooltip-autocomplete > ul > completion-section {padding: 1px 3px; line-height: 1.2;}
+.ͼ1 .cm-tooltip.cm-tooltip-autocomplete > ul > li {overflow-x: hidden; text-overflow: ellipsis; cursor: pointer;}
+.ͼ1 .cm-tooltip.cm-tooltip-autocomplete > ul > completion-section {display: list-item; border-bottom: 1px solid silver; padding-left: 0.5em; opacity: 0.7;}
+.ͼ1 .cm-tooltip.cm-tooltip-autocomplete > ul {font-family: monospace; white-space: nowrap; overflow: hidden auto; max-width: 700px; max-width: min(700px, 95vw); min-width: 250px; max-height: 10em; height: 100%; list-style: none; margin: 0; padding: 0;}
+.ͼ2 .cm-tooltip-autocomplete ul li[aria-selected] {background: #17c; color: white;}
+.ͼ2 .cm-tooltip-autocomplete-disabled ul li[aria-selected] {background: #777;}
+.ͼ3 .cm-tooltip-autocomplete ul li[aria-selected] {background: #347; color: white;}
+.ͼ3 .cm-tooltip-autocomplete-disabled ul li[aria-selected] {background: #444;}
+.ͼ1 .cm-completionListIncompleteTop:before, .ͼ1 .cm-completionListIncompleteBottom:after {content: "···"; opacity: 0.5; display: block; text-align: center;}
+.ͼ1 .cm-tooltip.cm-completionInfo {position: absolute; padding: 3px 9px; width: max-content; max-width: 400px; box-sizing: border-box;}
+.ͼ1 .cm-completionInfo.cm-completionInfo-left {right: 100%;}
+.ͼ1 .cm-completionInfo.cm-completionInfo-right {left: 100%;}
+.ͼ1 .cm-completionInfo.cm-completionInfo-left-narrow {right: 30px;}
+.ͼ1 .cm-completionInfo.cm-completionInfo-right-narrow {left: 30px;}
+.ͼ2 .cm-snippetField {background-color: #00000022;}
+.ͼ3 .cm-snippetField {background-color: #ffffff22;}
+.ͼ1 .cm-snippetFieldPosition {vertical-align: text-top; width: 0; height: 1.15em; display: inline-block; margin: 0 -0.7px -.7em; border-left: 1.4px dotted #888;}
+.ͼ1 .cm-completionMatchedText {text-decoration: underline;}
+.ͼ1 .cm-completionDetail {margin-left: 0.5em; font-style: italic;}
+.ͼ1 .cm-completionIcon {font-size: 90%; width: .8em; display: inline-block; text-align: center; padding-right: .6em; opacity: 0.6; box-sizing: content-box;}
+.ͼ1 .cm-completionIcon-function:after, .ͼ1 .cm-completionIcon-method:after {content: 'ƒ';}
+.ͼ1 .cm-completionIcon-class:after {content: '○';}
+.ͼ1 .cm-completionIcon-interface:after {content: '◌';}
+.ͼ1 .cm-completionIcon-variable:after {content: '𝑥';}
+.ͼ1 .cm-completionIcon-constant:after {content: '𝐶';}
+.ͼ1 .cm-completionIcon-type:after {content: '𝑡';}
+.ͼ1 .cm-completionIcon-enum:after {content: '∪';}
+.ͼ1 .cm-completionIcon-property:after {content: '□';}
+.ͼ1 .cm-completionIcon-keyword:after {content: '🔑︎';}
+.ͼ1 .cm-completionIcon-namespace:after {content: '▢';}
+.ͼ1 .cm-completionIcon-text:after {content: 'abc'; font-size: 50%; vertical-align: middle;}
+.ͼ1 .cm-tooltip {z-index: 100; box-sizing: border-box;}
+.ͼ2 .cm-tooltip {border: 1px solid #bbb; background-color: #f5f5f5;}
+.ͼ2 .cm-tooltip-section:not(:first-child) {border-top: 1px solid #bbb;}
+.ͼ3 .cm-tooltip {background-color: #333338; color: white;}
+.ͼ1 .cm-tooltip-arrow:before, .ͼ1 .cm-tooltip-arrow:after {content: ''; position: absolute; width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent;}
+.ͼ1 .cm-tooltip-above .cm-tooltip-arrow:before {border-top: 7px solid #bbb;}
+.ͼ1 .cm-tooltip-above .cm-tooltip-arrow:after {border-top: 7px solid #f5f5f5; bottom: 1px;}
+.ͼ1 .cm-tooltip-above .cm-tooltip-arrow {bottom: -7px;}
+.ͼ1 .cm-tooltip-below .cm-tooltip-arrow:before {border-bottom: 7px solid #bbb;}
+.ͼ1 .cm-tooltip-below .cm-tooltip-arrow:after {border-bottom: 7px solid #f5f5f5; top: 1px;}
+.ͼ1 .cm-tooltip-below .cm-tooltip-arrow {top: -7px;}
+.ͼ1 .cm-tooltip-arrow {height: 7px; width: 14px; position: absolute; z-index: -1; overflow: hidden;}
+.ͼ3 .cm-tooltip .cm-tooltip-arrow:before {border-top-color: #333338; border-bottom-color: #333338;}
+.ͼ3 .cm-tooltip .cm-tooltip-arrow:after {border-top-color: transparent; border-bottom-color: transparent;}
+.ͼ1.cm-focused .cm-matchingBracket {background-color: #328c8252;}
+.ͼ1.cm-focused .cm-nonmatchingBracket {background-color: #bb555544;}
+.ͼ1 .cm-foldPlaceholder {background-color: #eee; border: 1px solid #ddd; color: #888; border-radius: .2em; margin: 0 1px; padding: 0 1px; cursor: pointer;}
+.ͼ1 .cm-foldGutter span {padding: 0 1px; cursor: pointer;}
+.ͼ5 {color: #404740;}
+.ͼ6 {text-decoration: underline;}
+.ͼ7 {text-decoration: underline; font-weight: bold;}
+.ͼ8 {font-style: italic;}
+.ͼ9 {font-weight: bold;}
+.ͼa {text-decoration: line-through;}
+.ͼb {color: #708;}
+.ͼc {color: #219;}
+.ͼd {color: #164;}
+.ͼe {color: #a11;}
+.ͼf {color: #e40;}
+.ͼg {color: #00f;}
+.ͼh {color: #30a;}
+.ͼi {color: #085;}
+.ͼj {color: #167;}
+.ͼk {color: #256;}
+.ͼl {color: #00c;}
+.ͼm {color: #940;}
+.ͼn {color: #f00;}
+.ͼ4 .cm-line ::selection {background-color: transparent !important;}
+.ͼ4 .cm-line::selection {background-color: transparent !important;}
+.ͼ4 .cm-line {caret-color: transparent !important;}
+</style>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arduino Lab for MicroPython</title>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="./Arduino Lab for MicroPython_files/xterm.css">
+    <link rel="stylesheet" href="./Arduino Lab for MicroPython_files/main.css">
+    <link rel="shortcut icon" href="https://lab-micropython.arduino.cc/media/icon.png">
+
+    <!-- 3rd party dependencies -->
+    <script type="text/javascript" src="./Arduino Lab for MicroPython_files/codemirror.js.downloaden" charset="utf-8"></script>
+    <script type="text/javascript" src="./Arduino Lab for MicroPython_files/xterm.js.downloaden" charset="utf-8"></script>
+    <script type="text/javascript" src="./Arduino Lab for MicroPython_files/xterm-addon-fit.js.downloaden" charset="utf-8"></script>
+    <script type="text/javascript" src="./Arduino Lab for MicroPython_files/FileSaver.js.downloaden" charset="utf-8"></script>
+    <script type="text/javascript" src="./Arduino Lab for MicroPython_files/words.js.downloaden" charset="utf-8"></script>
+    <script type="text/javascript" src="./Arduino Lab for MicroPython_files/choo.js.downloaden" charset="utf-8"></script>
+    <script src="./Arduino Lab for MicroPython_files/auth0-spa-js.production.js.downloaden"></script>
+    <script type="text/javascript">
+      // GLOBAL VALUES
+      const PANEL_CLOSED = 45
+      const PANEL_TOO_SMALL = 65
+      const PANEL_DEFAULT = 320
+    </script>
+    <!-- Auth0, comment import to run locally -->
+    <script src="./Arduino Lab for MicroPython_files/auth0.js.downloaden" charset="utf-8"></script>
+    <!-- Application source code -->
+		<script type="module" src="./Arduino Lab for MicroPython_files/main.js.downloaden" charset="utf-8"></script>
+  </head>
+  <body>
+    <div id="app"><div id="working-area"><div id="toolbar"><div class="button"><button class="  "><img src="./Arduino Lab for MicroPython_files/disconnect.svg" class="icon"></button><div class="tooltip">Connect</div></div><div class="separator"></div><div class="button"><button disabled="disabled" class="  "><img src="./Arduino Lab for MicroPython_files/run.svg" class="icon"></button><div class="tooltip">Run</div></div><div class="button"><button disabled="disabled" class="  "><img src="./Arduino Lab for MicroPython_files/stop.svg" class="icon"></button><div class="tooltip">Stop</div></div><div class="button"><button disabled="disabled" class="  "><img src="./Arduino Lab for MicroPython_files/reboot.svg" class="icon"></button><div class="tooltip">Reset</div></div><div class="separator"></div><div class="button"><button disabled="disabled" class="  "><img src="./Arduino Lab for MicroPython_files/save.svg" class="icon"></button><div class="tooltip">Save</div></div><div class="button"><button disabled="disabled" class="  "><img src="./Arduino Lab for MicroPython_files/files.svg" class="icon"></button><div class="tooltip">Save</div></div></div><div class="row"><div id="tree-panel" class="column "><div id="tree-items"></div><div id="tree-options">
+        <div class="button"><button disabled="disabled" class="small  "><img src="./Arduino Lab for MicroPython_files/new-file.svg" class="icon"></button></div><div class="button"><button class="small  "><img src="./Arduino Lab for MicroPython_files/new-folder.svg" class="icon"></button></div><div class="button"><button disabled="disabled" class="small  "><img src="./Arduino Lab for MicroPython_files/delete.svg" class="icon"></button></div><div class="button"><button disabled="disabled" class="small  "><img src="./Arduino Lab for MicroPython_files/cursor.svg" class="icon"></button></div><div class="button"><button disabled="disabled" class="small  "><img src="./Arduino Lab for MicroPython_files/arrow-up.svg" class="icon"></button></div><div class="button"><button disabled="disabled" class="small  "><img src="./Arduino Lab for MicroPython_files/arrow-down.svg" class="icon"></button></div></div></div><div style="border-left: solid 2px #DCE1E1; " class="column"><div id="file-header">/bovine_opossum.py *</div><div id="code-editor" data-nanocomponent="ncid-2b23" data-onloadidrep87f6tu8p="o0"><div class="cm-editor cm-focused ͼ1 ͼ2 ͼ4"><div aria-live="polite" style="position: fixed; top: -10000px;"></div><div tabindex="-1" class="cm-scroller"><div class="cm-gutters" aria-hidden="true" style="min-height: 378.4px; position: sticky;"><div class="cm-gutter cm-lineNumbers"><div class="cm-gutterElement" style="height: 0px; visibility: hidden; pointer-events: none;">99</div><div class="cm-gutterElement" style="height: 22.4px; margin-top: 16px;">1</div><div class="cm-gutterElement" style="height: 22.4px;">2</div><div class="cm-gutterElement" style="height: 22.4px;">3</div><div class="cm-gutterElement" style="height: 22.4px;">4</div><div class="cm-gutterElement" style="height: 22.4px;">5</div><div class="cm-gutterElement" style="height: 22.4px;">6</div><div class="cm-gutterElement" style="height: 22.4px;">7</div><div class="cm-gutterElement cm-activeLineGutter" style="height: 22.4px;">8</div><div class="cm-gutterElement" style="height: 22.4px;">9</div><div class="cm-gutterElement" style="height: 22.4px;">10</div><div class="cm-gutterElement" style="height: 22.4px;">11</div><div class="cm-gutterElement" style="height: 22.4px;">12</div><div class="cm-gutterElement" style="height: 22.4px;">13</div><div class="cm-gutterElement" style="height: 22.4px;">14</div><div class="cm-gutterElement" style="height: 22.4px;">15</div><div class="cm-gutterElement" style="height: 22.4px;">16</div></div><div class="cm-gutter cm-foldGutter"><div class="cm-gutterElement" style="height: 0px; visibility: hidden; pointer-events: none;"><span title="Unfold line">›</span></div><div class="cm-gutterElement cm-activeLineGutter" style="height: 22.4px; margin-top: 172.8px;"></div></div></div><div spellcheck="false" autocorrect="off" autocapitalize="off" translate="no" contenteditable="true" class="cm-content" role="textbox" aria-multiline="true" data-language="python" aria-autocomplete="list" style="tab-size: 4;"><div class="cm-line"><span class="ͼb">from</span> time <span class="ͼb">import</span> sleep</div><div class="cm-line"><br></div><div class="cm-line">print(<span class="ͼe">"Hello! I'm a talkative robot. What's your name?"</span>)</div><div class="cm-line">student_name = input(<span class="ͼe">"Your name: "</span>)</div><div class="cm-line">print(<span class="ͼe">"Great meeting you, "</span> + student_name + <span class="ͼe">"! Would you like to name me?"</span>)</div><div class="cm-line">robot_name = input(<span class="ͼe">"Robot's name: "</span>)</div><div class="cm-line"><br></div><div class="cm-activeLine cm-line">print(<span class="ͼf">f"</span>{robot_name}<span class="ͼf"> is a fantastic name! I feel more human already."</span>)</div><div class="cm-line"><br></div><div class="cm-line">sleep(<span class="ͼd">2</span>) <span class="ͼm"># Use sleep() to make interaction feel more natural</span></div><div class="cm-line">print(<span class="ͼf">f"Okay, </span>{student_name}<span class="ͼf">, time for a quick laugh:"</span>)</div><div class="cm-line">sleep(<span class="ͼd">2</span>)</div><div class="cm-line">print(<span class="ͼe">"Have you heard of the robot that tried to swim?"</span>)</div><div class="cm-line">sleep(<span class="ͼd">4</span>)</div><div class="cm-line">print(<span class="ͼe">"It shocked everyone. :D"</span>)</div><div class="cm-line">sleep(<span class="ͼd">5</span>)</div></div><div class="cm-layer cm-layer-above cm-cursorLayer" aria-hidden="true" style="z-index: 150; animation-duration: 1200ms; animation-name: cm-blink2;"><div class="cm-cursor cm-cursor-primary" style="left: 205.55px; top: 174.4px; height: 18.4px;"></div></div><div class="cm-layer cm-selectionLayer" aria-hidden="true" style="z-index: -2;"></div></div></div></div><div id="panel" style="height: 320px"><div id="panel-bar"><div id="drag-handle"></div><div id="term-operations" class="visible">
+          <div class="button"><button class="small  "><img src="./Arduino Lab for MicroPython_files/delete.svg" class="icon"></button><div class="tooltip">Clean</div></div></div><div class="button"><button class="small  "><img src="./Arduino Lab for MicroPython_files/arrow-down.svg" class="icon"></button></div></div><div class="terminal-disabled"><div id="terminal-wrapper" data-nanocomponent="ncid-6c78" data-onloadidrep87f6tu8p="o1"><div dir="ltr" class="terminal xterm" tabindex="0" role="document"><div class="xterm-viewport" style="background-color: rgb(0, 0, 0);"><div class="xterm-scroll-area" style="height: 221px;"></div></div><div class="xterm-screen" style="width: 1470px; height: 221px;"><div class="xterm-helpers"><textarea class="xterm-helper-textarea" aria-label="Terminal input" aria-multiline="false" autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0"></textarea><span class="xterm-char-measure-element" aria-hidden="true" style="font-family: courier-new, courier, monospace; font-size: 15px;">W</span><div class="composition-view"></div></div><canvas class="xterm-text-layer" width="1837" height="276" style="z-index: 0; width: 1470px; height: 221px;"></canvas><canvas class="xterm-selection-layer" width="1837" height="276" style="z-index: 1; width: 1470px; height: 221px;"></canvas><canvas class="xterm-link-layer" width="1837" height="276" style="z-index: 2; width: 1470px; height: 221px;"></canvas><canvas class="xterm-cursor-layer" width="1837" height="276" style="z-index: 3; width: 1470px; height: 221px;"></canvas></div></div></div></div></div></div></div></div><div id="overlay" class="closed"></div></div>
+  
+
+</body></html>
