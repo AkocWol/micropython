@@ -1,3 +1,141 @@
-# This program was created in Arduino Lab for MicroPython
+# level_1_no_way_out.py — afstand + LIJNSENSOREN beschermen
+from time import sleep_ms, ticks_ms, ticks_diff
+import sys
 
-print('Hello, MicroPython!')
+def dbg(*a): print(*a); sys.stdout.flush()
+
+# ---- ArduinoAlvik init
+from arduino_alvik import ArduinoAlvik
+alvik = ArduinoAlvik(); alvik.begin()
+dbg("ALVIK OK")
+
+# ---- TWEAKS (pas deze 3 aan als nodig)
+OPEN_THRESHOLD = 35      # opening vinden (cm)
+WALL_SAFE      = 35      # te dichtbij (cm) => back-off
+EXIT_CLEAR_CM  = 120     # “buiten” (cm)
+
+# Lijn-drempels (voor 3-sensor set). Verhoog/verlaag als nodig.
+LINE_CENTER_HIT = 250    # center > dit => lijn getroffen
+LINE_SUM_HIT    = 600    # L+C+R > dit => lijn getroffen
+
+CONFIRM_TICKS  = 3
+SCAN_SPEED     = 16
+DRIVE_SPEED    = 20
+MAX_DRIVE_MS   = 9000
+VALID_MIN      = 2
+VALID_MAX      = 400
+
+# ---- helpers
+def led_both(r,g,b):
+    alvik.left_led.set_color(r,g,b); alvik.right_led.set_color(r,g,b)
+
+def set_wheels(l, r): alvik.set_wheels_speed(l, r)
+def stop():           set_wheels(0,0)
+def rotate_right():   set_wheels(SCAN_SPEED, -SCAN_SPEED)
+def forward():        set_wheels(DRIVE_SPEED, DRIVE_SPEED)
+def backward():       set_wheels(-18, -18)
+
+def blink_success():
+    for _ in range(3):
+        led_both(0,1,0); sleep_ms(220)
+        led_both(0,0,0); sleep_ms(220)
+
+# ---- sensoren
+def read_front_cm():
+    """Neem median van centrale afstandssensor (C)."""
+    vals = []
+    for _ in range(5):
+        try:
+            L, CL, C, CR, R = alvik.get_distance()  # cm verwacht
+            v = int(C)
+            if VALID_MIN <= v <= VALID_MAX:
+                vals.append(v)
+        except:
+            pass
+        sleep_ms(8)
+    if not vals: return None
+    vals.sort()
+    n = len(vals)
+    return vals[n//2] if n%2==1 else (vals[n//2-1]+vals[n//2])//2
+
+def line_blocking():
+    """True als lijn/kleurrand onder de neus ligt."""
+    try:
+        ls = alvik.get_line_sensors()   # verwacht (L,C,R)
+        if not isinstance(ls, (tuple, list)) or len(ls) < 3:
+            return False
+        L, C, R = int(ls[0]), int(ls[1]), int(ls[2])
+        s = L + C + R
+        # Debug kort: dbg("line:", L, C, R, "sum", s)
+        if C > LINE_CENTER_HIT: return True
+        if s > LINE_SUM_HIT:    return True
+        return False
+    except:
+        return False
+
+# ---- gedrag
+def scan_for_opening():
+    """Draaien tot vrije richting gevonden is (zonder op lijn te staan)."""
+    consecutive_clear = 0
+    rotate_right()
+    while True:
+        if line_blocking():
+            stop(); backward(); sleep_ms(350); stop()
+            rotate_right()
+            consecutive_clear = 0
+            continue
+
+        d = read_front_cm()
+        if d is not None and d > OPEN_THRESHOLD:
+            consecutive_clear += 1
+        else:
+            consecutive_clear = 0
+        if consecutive_clear >= CONFIRM_TICKS:
+            stop(); sleep_ms(150)
+            return True
+        sleep_ms(40)
+
+def drive_out():
+    """Korte ‘bursts’ vooruit; telkens checken op muur OF lijn."""
+    start = ticks_ms()
+    while True:
+        # mini-stapje vooruit
+        forward(); sleep_ms(120)
+        stop();    sleep_ms(40)
+
+        # lijn = direct risico (kleur-rand)
+        if line_blocking():
+            backward(); sleep_ms(400); stop()
+            return "rescan"
+
+        d = read_front_cm()
+        if d is None:
+            backward(); sleep_ms(300); stop()
+            return "rescan"
+        if d < WALL_SAFE:
+            stop(); backward(); sleep_ms(450); stop()
+            return "rescan"
+        if d > EXIT_CLEAR_CM or ticks_diff(ticks_ms(), start) > MAX_DRIVE_MS:
+            stop(); return "success"
+
+def main():
+    # zelfde knoppen-UX
+    led_both(0,1,0)  # groen=klaar
+    while alvik.get_touch_ok(): sleep_ms(50)
+    while not alvik.get_touch_ok(): sleep_ms(50)
+
+    while True:
+        while not alvik.get_touch_cancel():
+            led_both(0,0,1)  # blauw=scannen
+            if scan_for_opening():
+                led_both(1,1,0)  # geel=rijden
+                res = drive_out()
+                if res == "success":
+                    blink_success()
+                    led_both(0,0,1); sleep_ms(1200)
+
+        while not alvik.get_touch_ok():
+            led_both(0,0,1); alvik.brake(); sleep_ms(120)
+
+if __name__ == "__main__":
+    main()
