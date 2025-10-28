@@ -1,292 +1,128 @@
-# ===== Alvik Level 1 - No Way Out (single-file, OK/Cancel start-stop) =====
-
-# --- minimale time wrappers zonder import-statement ---
+# ==== Level 1 – Simple: spin → find opening → drive → blink ====
 _time = __import__('time')
-sleep_ms   = _time.sleep_ms
-ticks_ms   = _time.ticks_ms
+sleep_ms = _time.sleep_ms
+ticks_ms = _time.ticks_ms
 ticks_diff = _time.ticks_diff
 
-# --- probeer bestaand robot-object te gebruiken; anders maak er één ---
 try:
-    a  # bestaat er al een 'a'? mooi.
+    a
 except NameError:
-    try:
-        ArduinoAlvik = __import__('arduino_alvik').ArduinoAlvik
-        a = ArduinoAlvik(); a.begin()
-    except Exception as e:
-        raise SystemExit("Geen robot-object 'a' gevonden en kon ArduinoAlvik niet aanmaken.")
+    ArduinoAlvik = __import__('arduino_alvik').ArduinoAlvik
+    a = ArduinoAlvik(); a.begin()
 
-# ----------------- Tunables (basis) -----------------
-OPEN    = 50     # cm: opening bij scannen
-SAFE    = 55     # cm: directe rem onder dit
-EXIT    = 140    # cm: buiten
-SCAN    = 18     # draai-snelheid
-SPEED   = 24     # rij-snelheid
-TIMEOUT = 9000   # ms failsafe
-OK_OPEN_SAMPLES  = 3   # scan-stabilisatie
-OK_EXIT_SAMPLES  = 3   # exit-stabilisatie
-# --------------------------------------------
+# ---- Instellingen (voor kleine doos zoals op je foto) ----
+OPEN = 40      # cm: wat als 'opening' telt
+SAFE = 25      # cm: als kleiner -> stop & terug
+EXIT = 110     # cm: 'buiten'
+SCAN = 16      # draaisnelheid
+SPEED = 22     # rij-snelheid
+OK_OPEN = 3    # stabiele open metingen
+OK_EXIT = 3
+# ---------------------------------------------------------
 
-# ===== Small-Box Auto Tune (bepaalt drempels in kleine box) =====
-SMALL_BOX_MODE = True            # zet op False als je weer in een grote ruimte test
-SPIN_MS = 1200                   # 1.2 s langzame spin voor sampling
+# ---- LED helpers (kort) ----
+def led(r,g,b):
+    for fn in ("set_rgb","set_led","rgb"):
+        try: getattr(a,fn)(r,g,b); return
+        except: pass
+def led_scan(): led(0,0,180)
+def led_drive(): led(0,180,0)
+def led_done(): led(200,200,200)
+def led_warn(): led(180,0,0)
+def led_off(): led(0,0,0)
+def blink_done(n=6,on=150,off=150):
+    for _ in range(n): led_done(); sleep_ms(on); led_off(); sleep_ms(off)
 
-def _percentile(sorted_list, p):
-    if not sorted_list:
-        return None
-    i = max(0, min(len(sorted_list)-1, int(p * (len(sorted_list)-1))))
-    return sorted_list[i]
-
-def autotune_small_box():
-    # langzame spin en samples verzamelen
-    try: a.set_wheels_speed(12, -12)
-    except: pass
-    samples = []
-    t0 = ticks_ms()
-    while ticks_diff(ticks_ms(), t0) < SPIN_MS:
-        d = front_cm()
-        if d is not None:
-            samples.append(d)
-        sleep_ms(30)
-    hard_stop()
-
-    if len(samples) < 5:
-        return None  # te weinig data om zinvol af te leiden
-
-    samples.sort()
-    env_med = _percentile(samples, 0.50)   # mediane vrije blik
-    env_p90 = _percentile(samples, 0.90)   # “bijna max” vrije blik
-
-    # Grenzen afleiden uit omgeving
-    open_cm = max(30, int(env_med * 0.75))              # stabiel triggerpunt
-    safe_cm = max(open_cm + 8, int(open_cm * 1.15))     # strenger dan OPEN
-    exit_cm = max(open_cm + 30, int(env_p90 * 0.95))    # dicht bij 'max' box
-
-    scan_spd  = 14
-    drive_spd = 22
-    ok_open   = 3
-    ok_exit   = 4
-    timeout_ms = 15000
-
-    return {
-        "OPEN": open_cm, "SAFE": safe_cm, "EXIT": exit_cm,
-        "SCAN": scan_spd, "SPEED": drive_spd,
-        "OK_OPEN_SAMPLES": ok_open, "OK_EXIT_SAMPLES": ok_exit,
-        "TIMEOUT": timeout_ms
-    }
-
-def apply_small_box_tune(cfg):
-    global OPEN, SAFE, EXIT, SCAN, SPEED, OK_OPEN_SAMPLES, OK_EXIT_SAMPLES, TIMEOUT
-    OPEN  = cfg["OPEN"]
-    SAFE  = cfg["SAFE"]
-    EXIT  = cfg["EXIT"]
-    SCAN  = cfg["SCAN"]
-    SPEED = cfg["SPEED"]
-    OK_OPEN_SAMPLES = cfg["OK_OPEN_SAMPLES"]
-    OK_EXIT_SAMPLES = cfg["OK_EXIT_SAMPLES"]
-    TIMEOUT = cfg["TIMEOUT"]
-
-# ================== LED helpers ==================
-def _led_pair(r, g, b):
-    """Gebruik bij voorkeur afzonderlijke led's; val anders terug op een RGB-call."""
-    done = False
-    # links/rechts leds (zoals in je andere project)
-    try:
-        a.left_led.set_color(1 if r else 0, 1 if g else 0, 1 if b else 0)
-        a.right_led.set_color(1 if r else 0, 1 if g else 0, 1 if b else 0)
-        done = True
-    except:
-        pass
-    if done:
-        return
-    # fallback: één RGB API
-    for fn in ("set_rgb", "set_led", "set_underlight", "set_light", "rgb"):
-        try:
-            getattr(a, fn)(int(r*180), int(g*180), int(b*180))
-            return
-        except:
-            pass
-
-def led_scan():  _led_pair(0,0,1)   # blauw = rondkijken
-def led_drive(): _led_pair(0,1,0)   # groen = rijden
-def led_warn():  _led_pair(1,0,0)   # rood/oranje = bijna muur
-def led_turn():  _led_pair(1,0,1)   # paars = wegdraaien
-def led_stop():  _led_pair(1,0,0)   # rood = hard-stop
-def led_done():  _led_pair(1,1,1)   # wit = klaar
-def led_off():   _led_pair(0,0,0)
-
-def blink_done(times=6, on=120, off=120):
-    for _ in range(times):
-        led_done(); sleep_ms(on)
-        led_off();  sleep_ms(off)
-
-# ================== Button helpers ==================
+# ---- Buttons ----
 def _ok_raw():
-    try: return bool(a.get_touch_ok())
-    except: pass
-    for name in ("is_ok_pressed","is_check_pressed","button_check","get_ok"):
-        try: return bool(getattr(a, name)())
+    for n in ("get_touch_ok","is_ok_pressed","is_check_pressed","button_check","get_ok"):
+        try: return bool(getattr(a,n)())
         except: pass
     return False
-
 def _cancel_raw():
-    try: return bool(a.get_touch_cancel())
-    except: pass
-    for name in ("is_cancel_pressed","is_cross_pressed","button_cross","get_cancel"):
-        try: return bool(getattr(a, name)())
+    for n in ("get_touch_cancel","is_cancel_pressed","is_cross_pressed","button_cross","get_cancel"):
+        try: return bool(getattr(a,n)())
         except: pass
     return False
 
 def wait_ok_released():
-    while _ok_raw():
-        sleep_ms(50)
-
+    while _ok_raw(): sleep_ms(50)
 def wait_ok_pressed():
     while not _ok_raw():
         led_scan()
         try: a.brake()
         except: pass
-        sleep_ms(50)
-
+        sleep_ms(80)
 def pause_until_ok():
     while not _ok_raw():
-        led_scan()
-        try: a.brake()
-        except: pass
-        sleep_ms(100)
-    led_drive(); sleep_ms(150)
+        led_scan(); sleep_ms(80)
+    led_drive(); sleep_ms(100)
 
-# ================== Motion helpers ==================
-def hard_stop():
-    led_stop()
-    try: a.set_wheels_speed(0, 0)
-    except: pass
-    try: a.brake()
-    except: pass
-    sleep_ms(150)
-
-def back_off(ms=600, spd=-26):
+# ---- Motor + afstand ----
+def stop():
     led_warn()
-    try: a.set_wheels_speed(spd, spd)
+    try: a.set_wheels_speed(0,0); a.brake()
     except: pass
-    sleep_ms(ms)
-    hard_stop()
+    sleep_ms(100)
 
-def pivot(ms=700, spd=SCAN):
-    led_turn()
-    try: a.set_wheels_speed(-spd, spd)
+def set_spd(l,r):
+    try: a.set_wheels_speed(l,r)
     except: pass
-    sleep_ms(ms)
-    hard_stop()
 
-# ================== Sensing ==================
-def front_cm():
-    """
-    Neemt min(CL,C,CR). 1 sample. mm->cm indien nodig. None bij onzin.
-    """
+def dist():
     try:
-        L, CL, C, CR, R = a.get_distance()
-        xs = []
-        for v in (CL, C, CR):
-            v = int(v)
-            if v > 1000:  # aanname: mm
-                v //= 10  # naar cm
-            if 2 <= v <= 400:
-                xs.append(v)
-        if not xs:
-            return None
-        return min(xs)
+        _,CL,C,CR,_ = a.get_distance()
+        vals = [int(v)//10 if int(v)>1000 else int(v) for v in (CL,C,CR)]
+        vals = [v for v in vals if 2<=v<=400]
+        return min(vals) if vals else None
     except:
         return None
 
-# ================== Behaviors ==================
-def scan():
+# ---- Hoofdlogica ----
+def scan_for_opening():
     led_scan()
-    try: a.set_wheels_speed(SCAN, -SCAN)  # in-place spin
-    except: pass
-    ok = 0
+    set_spd(SCAN,-SCAN)
+    ok=0
     while True:
-        if _cancel_raw():
-            hard_stop()
-            pause_until_ok()
-            led_scan()
-            try: a.set_wheels_speed(SCAN, -SCAN)
-            except: pass
-
-        d = front_cm()
-        ok = ok + 1 if (d is not None and d > OPEN) else 0
-        if ok >= OK_OPEN_SAMPLES:
-            hard_stop()
-            return
-
-def drive():
-    led_drive()
-    start = ticks_ms()
-    exit_ok = 0
-    try: a.set_wheels_speed(SPEED, SPEED)
-    except: pass
-
-    while True:
-        if _cancel_raw():
-            hard_stop()
-            pause_until_ok()
-            led_drive()
-            try: a.set_wheels_speed(SPEED, SPEED)
-            except: pass
-
-        d = front_cm()
-
-        # Onmiddellijk stoppen bij gevaar of onzekere meting
-        if d is None or d < SAFE:
-            hard_stop()
-            back_off(600, -26)
-            pivot(700, SCAN)
-            return False  # terug naar scan
-
-        # Check "buiten" met opeenvolgende goede samples
-        if d is not None and d > EXIT:
-            exit_ok += 1
-            if exit_ok >= OK_EXIT_SAMPLES:
-                hard_stop()
-                return True
-        else:
-            exit_ok = 0
-
-        # Failsafe
-        if ticks_diff(ticks_ms(), start) > TIMEOUT:
-            hard_stop()
+        if _cancel_raw(): stop(); pause_until_ok(); led_scan(); set_spd(SCAN,-SCAN)
+        d=dist()
+        ok = ok+1 if (d and d>OPEN) else 0
+        if ok>=OK_OPEN:
+            stop()
             return True
-
         sleep_ms(20)
 
-# ================== Main ==================
-# Zet beide leds blauw → wachtstand
+def drive_until_exit():
+    led_drive()
+    set_spd(SPEED,SPEED)
+    exit_ok=0
+    while True:
+        if _cancel_raw(): stop(); pause_until_ok(); led_drive(); set_spd(SPEED,SPEED)
+        d=dist()
+        if not d: continue
+        # te dichtbij -> stop + terug + pivot
+        if d<SAFE:
+            stop()
+            set_spd(-SPEED,-SPEED); sleep_ms(500)
+            set_spd(-SCAN,SCAN); sleep_ms(600)
+            stop()
+            return False
+        # buiten?
+        if d>EXIT:
+            exit_ok+=1
+            if exit_ok>=OK_EXIT:
+                stop(); blink_done(); return True
+        else:
+            exit_ok=0
+        sleep_ms(20)
+
+# ---- Main loop ----
 led_scan()
-
-# Wachten tot OK losgelaten is, dan wachten tot OK gedrukt wordt (startsignaal)
-wait_ok_released()
-wait_ok_pressed()
-
-# Auto-tune voor kleine box, eenmalig aan het begin
-if SMALL_BOX_MODE:
-    led_scan()
-    cfg = autotune_small_box()
-    if cfg:
-        apply_small_box_tune(cfg)
-    else:
-        # fallbacks als sampling mislukte
-        SCAN, SPEED = 14, 22
-        OPEN, SAFE, EXIT = 40, 50, 120
-        OK_OPEN_SAMPLES, OK_EXIT_SAMPLES = 3, 4
-        TIMEOUT = 15000
+wait_ok_released(); wait_ok_pressed()
 
 while True:
-    # Hoofdloop: zolang CANCEL niet ingedrukt is, uitvoeren; bij CANCEL pauzeren tot OK
     while not _cancel_raw():
-        scan()
-        if drive():
-            blink_done(times=6, on=120, off=120)
-            raise SystemExit
-    # Pauzeer tot opnieuw OK wordt gedrukt
-    hard_stop()
-    pause_until_ok()
+        if scan_for_opening():
+            if drive_until_exit():
+                pause_until_ok()
+    stop(); pause_until_ok()
