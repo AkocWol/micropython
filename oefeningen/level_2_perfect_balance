@@ -1,0 +1,284 @@
+# ===== Alvik Level 2 — Perfect Balance (same style, single-file) =====
+
+# ingebouwde modules via __import__ (geen normale import rules)
+_time = __import__('time')
+_math = __import__('math')
+sleep_ms   = _time.sleep_ms
+ticks_ms   = _time.ticks_ms
+ticks_diff = _time.ticks_diff
+atan2      = _math.atan2
+sqrt       = _math.sqrt
+pi         = _math.pi
+
+# --- maak/gebruik exact hetzelfde object en API-namen als in je project ---
+try:
+    alvik  # bestaat al? top.
+except NameError:
+    try:
+        ArduinoAlvik = __import__('arduino_alvik').ArduinoAlvik
+        alvik = ArduinoAlvik()
+        alvik.begin()
+    except Exception as e:
+        raise SystemExit("Kon 'alvik' niet initialiseren; check firmware/naam.")
+
+# ----------------- Tunables -----------------
+SPEED_UP          = 28    # snelheid bergop (heen)
+SPEED_DOWN        = 24    # snelheid bergaf (terugweg)
+BALANCE_HOLD_MS   = 2200  # hoe lang even stilstaan op het kantelpunt
+SAMPLE_DT_MS      = 40    # IMU sample interval (~25 Hz)
+UP_MIN_DEG        = 6     # minimale pitch die aangeeft dat we echt op de helling klimmen
+TILT_DROP_DEG     = 10    # plotselinge afname van pitch (deg) die de 'tilt' detecteert
+ZERO_ABS_DEG      = 3     # |pitch| kleiner dan dit = vlak genoeg
+STABLE_SAMPLES    = 6     # aantal opeenvolgende samples om 'stabiel' te bevestigen
+DESCEND_TIMEOUT   = 9000  # failsafe tijdens afdalen (ms)
+ASCEND_TIMEOUT    = 9000  # failsafe tijdens klimmen (ms)
+# --------------------------------------------
+
+# =============== LED helpers — zelfde stijl ===============
+def leds(r, g, b):
+    try:
+        alvik.left_led.set_color(1 if r else 0, 1 if g else 0, 1 if b else 0)
+        alvik.right_led.set_color(1 if r else 0, 1 if g else 0, 1 if b else 0)
+    except:
+        pass
+
+def led_wait():   leds(0,0,1)   # blauw: wachten
+def led_go():     leds(0,1,0)   # groen: rijden
+def led_pause():  leds(1,1,0)   # geel: balanceren / pauze
+def led_stop():   leds(1,0,0)   # rood: noodstop
+def led_turn():   leds(1,0,1)   # paars: state change
+def led_done():   leds(1,1,1)   # wit: klaar
+def led_off():    leds(0,0,0)
+
+def blink_done(times=6, on=140, off=140):
+    for _ in range(times):
+        led_done(); sleep_ms(on)
+        led_off();  sleep_ms(off)
+
+# ===================== Buttons (zelfde API) =====================
+def ok_pressed():
+    try: return bool(alvik.get_touch_ok())
+    except: return False
+
+def cancel_pressed():
+    try: return bool(alvik.get_touch_cancel())
+    except: return False
+
+def wait_ok_released():
+    while ok_pressed():
+        sleep_ms(50)
+
+def wait_ok_pressed():
+    while not ok_pressed():
+        led_wait()
+        try: alvik.brake()
+        except: pass
+        sleep_ms(50)
+
+def pause_until_ok():
+    # Pauze modus: blauw, remmen, wachten op OK
+    while not ok_pressed():
+        led_wait()
+        try: alvik.brake()
+        except: pass
+        sleep_ms(100)
+    led_go(); sleep_ms(150)
+
+# ===================== Motion helpers =====================
+def hard_stop():
+    led_stop()
+    try: alvik.set_wheels_speed(0, 0)
+    except: pass
+    try: alvik.brake()
+    except: pass
+    sleep_ms(120)
+
+def forward(spd):
+    try: alvik.set_wheels_speed(spd, spd)
+    except: pass
+
+# ===================== IMU / Pitch meting =====================
+# We willen pitch (kanteling voor/achter) in graden.
+# We proberen eerst kant-en-klare Euler-hoeken; anders schatten we uit accelerometer.
+def _try_get_euler_pitch():
+    # Kandidaten: get_euler() -> (roll, pitch, yaw) of dict met 'pitch'
+    for fn in ("get_euler", "get_orientation"):
+        try:
+            e = getattr(alvik, fn)()
+            # tuple of list
+            if isinstance(e, (tuple, list)) and len(e) >= 2:
+                return float(e[1])  # pitch
+            # dict
+            if isinstance(e, dict) and "pitch" in e:
+                return float(e["pitch"])
+        except:
+            pass
+    return None
+
+def _try_get_accel_pitch():
+    # Kandidaten: get_accelerometer() -> (ax, ay, az)
+    # Of get_imu() -> (ax, ay, az, gx, gy, gz) of dict.
+    ax = ay = az = None
+    for fn in ("get_accelerometer", "get_accel", "accel"):
+        try:
+            a3 = getattr(alvik, fn)()
+            if isinstance(a3, (tuple, list)) and len(a3) >= 3:
+                ax, ay, az = float(a3[0]), float(a3[1]), float(a3[2])
+                break
+            if isinstance(a3, dict):
+                ax = float(a3.get("ax", a3.get("x", 0.0)))
+                ay = float(a3.get("ay", a3.get("y", 0.0)))
+                az = float(a3.get("az", a3.get("z", 0.0)))
+                break
+        except:
+            pass
+    if ax is None:
+        # probeer get_imu()
+        try:
+            imu = alvik.get_imu()
+            if isinstance(imu, (tuple, list)) and len(imu) >= 3:
+                ax, ay, az = float(imu[0]), float(imu[1]), float(imu[2])
+            elif isinstance(imu, dict):
+                ax = float(imu.get("ax", imu.get("x", 0.0)))
+                ay = float(imu.get("ay", imu.get("y", 0.0)))
+                az = float(imu.get("az", imu.get("z", 0.0)))
+        except:
+            pass
+    if ax is None:
+        return None
+
+    # Pitch uit accelerometer (graden). Aanname: X is voor/achter.
+    # Formule: pitch = atan2(-ax, sqrt(ay^2 + az^2)) * 180/pi
+    try:
+        pitch = atan2(-ax, sqrt(ay*ay + az*az)) * (180.0 / pi)
+        return float(pitch)
+    except:
+        return None
+
+def get_pitch_deg():
+    p = _try_get_euler_pitch()
+    if p is not None:
+        return p
+    return _try_get_accel_pitch()
+
+# ===================== Gedrag =====================
+def climb_until_tilt():
+    """
+    Rijd de helling op tot het kantelpunt.
+    Detectie:
+      1) Eerst bevestigen dat we echt klimmen: pitch >= UP_MIN_DEG (consecutief).
+      2) 'Tilt' event: pitch daalt plots >= TILT_DROP_DEG óf gaat van + naar 0/- in korte tijd.
+    CANCEL pauzeert en hervat.
+    """
+    led_go()
+    forward(SPEED_UP)
+    started_up = 0
+    p_prev = None
+    t0 = ticks_ms()
+
+    while True:
+        if cancel_pressed():
+            hard_stop()
+            pause_until_ok()
+            led_go()
+            forward(SPEED_UP)
+
+        p = get_pitch_deg()
+        if p is None:
+            # geen IMU? rijd rustig door, maar hou failsafe aan
+            p = p_prev if p_prev is not None else 0.0
+
+        # bevestig dat we op de helling zitten
+        if p >= UP_MIN_DEG:
+            started_up += 1
+        else:
+            started_up = 0
+
+        # tilt-detectie zodra we al klimmen:
+        tilt = False
+        if started_up >= 3 and p_prev is not None:
+            dp = p - p_prev
+            # grote negatieve sprong: brug klapt naar voren
+            if dp <= -TILT_DROP_DEG:
+                tilt = True
+            # of kruisen we door 0 (van + naar 0/-) kort nadat we klommen?
+            elif (p_prev > 0 and p <= ZERO_ABS_DEG):
+                tilt = True
+
+        if tilt:
+            hard_stop()
+            led_pause()
+            sleep_ms(BALANCE_HOLD_MS)  # *balanceren in het midden*
+            return True  # klaar met deel 1
+
+        # failsafe
+        if ticks_diff(ticks_ms(), t0) > ASCEND_TIMEOUT:
+            hard_stop()
+            led_pause()
+            sleep_ms(600)  # korte pauze
+            return True  # ga door alsof we het midden hebben bereikt
+
+        p_prev = p
+        sleep_ms(SAMPLE_DT_MS)
+
+def descend_until_flat_and_off():
+    """
+    Na de balans-pauze rij je verder naar beneden tot we weer vlak zijn.
+    Criteria 'klaar':
+      - |pitch| <= ZERO_ABS_DEG, STABLE_SAMPLES keer op rij (vlak terrein).
+    """
+    led_go()
+    forward(SPEED_DOWN)
+    stable = 0
+    t0 = ticks_ms()
+
+    while True:
+        if cancel_pressed():
+            hard_stop()
+            pause_until_ok()
+            led_go()
+            forward(SPEED_DOWN)
+
+        p = get_pitch_deg()
+        if p is None:
+            p = 0.0
+
+        if abs(p) <= ZERO_ABS_DEG:
+            stable += 1
+        else:
+            stable = 0
+
+        if stable >= STABLE_SAMPLES:
+            hard_stop()
+            return True
+
+        # failsafe
+        if ticks_diff(ticks_ms(), t0) > DESCEND_TIMEOUT:
+            hard_stop()
+            return True
+
+        sleep_ms(SAMPLE_DT_MS)
+
+# ===================== Main — zelfde flow als je werktende project =====================
+# Wachtstand (blauw), start met OK, pauzeer met CANCEL
+led_wait()
+wait_ok_released()
+wait_ok_pressed()
+
+try:
+    while True:
+        while not cancel_pressed():
+            # Deel 1: klim en detecteer kantelpunt → pauze
+            if not climb_until_tilt():
+                continue
+            # Deel 2: daal af en wacht tot we vlak staan → klaar
+            if descend_until_flat_and_off():
+                blink_done(times=6, on=140, off=140)
+                raise SystemExit
+        # CANCEL → pauze, tot OK weer wordt gedrukt
+        hard_stop()
+        pause_until_ok()
+
+except KeyboardInterrupt:
+    try: alvik.stop()
+    except: pass
