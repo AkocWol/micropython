@@ -1,4 +1,4 @@
-# ==== Alvik L2 — Buttons Always + Infinite Run + Final Flat Stop ====
+# ==== Alvik Level 2 — Straight + Buttons + Robust Final Flat (no timers/cm) ====
 _time=__import__('time'); _math=__import__('math')
 sleep_ms=_time.sleep_ms; ticks_ms=_time.ticks_ms; ticks_diff=_time.ticks_diff
 atan2=_math.atan2; sqrt=_math.sqrt; pi=_math.pi
@@ -9,48 +9,60 @@ except NameError:
     ArduinoAlvik=__import__('arduino_alvik').ArduinoAlvik
     alvik=ArduinoAlvik(); alvik.begin()
 
-# ===== Tunables (kort & snel) =====
-DIR=1                     # 1=vooruit, -1=achteruit als jouw wiring zo is
+# ===================== Tunables =====================
+DIR=1                 # 1=vooruit, -1=achteruit als jouw wiring zo is
 TRIM_L=0.0; TRIM_R=0.0
+
+# Snelheden & sampling
 SPEED_UP=28; SPEED_UP_SLOW=20; SPEED_DOWN=24
 SAMPLE_DT_MS=15
-UP_MIN_DEG=4; UP_SLOW_DEG=10; TILT_DROP_DEG=7
 
-MID_ZERO_DEG=5           # midden = |pitch| <= 5°
-MID_STABLE_SAMPLES=1     # 1 sample is genoeg (klein midden)
-MID_WINDOW_MS=900        # venster na crest/klap
+# Midden-detectie (korte vlak-zone)
+UP_MIN_DEG=4         # klimmen vanaf deze pitch
+UP_SLOW_DEG=10       # boven dit langzamer rijden (overshoot voorkomen)
+TILT_DROP_DEG=7      # plots daling markeert 'klap'
+MID_ZERO_DEG=5       # midden ~ |pitch| <= 5°
+MID_STABLE_SAMPLES=1 # 1 sample is genoeg (korte vlak-zone)
+MID_WINDOW_MS=900    # venster na crest/klap waarin zero telt
 
-FINAL_ZERO_DEG=4         # eindsituatie: |pitch| <= 4° (vlak op tafel)
-FINAL_STABLE_SAMPLES=4   # 4 opeenvolgende vlakke metingen
-FINAL_MIN_MS=400         # pas vlak toestaan >= 0.4s na midden
-# ================================
+# Robuuste eind-detectie (géén tijd/afstand)
+DESC_MIN_DEG=6            # afdalen pas 'echt' bij pitch <= -6°
+DESC_SAMPLES_ARM=4        # zoveel negatieve samples om te armen
+FINAL_ZERO_DEG=4          # vlak-venster voor tafel
+FINAL_STABLE_SAMPLES=5    # zoveel opeenvolgende 'stabiele' samples
+DERIV_EPS=0.6             # max |Δpitch|/sample (graden) voor 'stil'
+GYRO_STILL_DPS=8.0        # som |gx|+|gy|+|gz| dps (als gyro is) voor 'stil'
+# ====================================================
 
-# --- LEDs ---
+# ---------------- LEDs ----------------
 def _led(rgb):
     try: r,g,b=rgb; alvik.left_led.set_color(r,g,b); alvik.right_led.set_color(r,g,b)
     except: pass
-def led_wait():  _led((0,0,1))
-def led_go():    _led((0,1,0))
-def led_pause(): _led((1,1,0))
-def led_done():  _led((1,1,1))
+def led_wait():  _led((0,0,1))   # blauw
+def led_go():    _led((0,1,0))   # groen
+def led_pause(): _led((1,1,0))   # geel
+def led_done():  _led((1,1,1))   # wit
 
-# --- Buttons (altijd responsief) ---
+# -------------- Buttons --------------
 def ok_pressed():
     try: return bool(alvik.get_touch_ok())
     except: return False
 def cancel_pressed():
     try: return bool(alvik.get_touch_cancel())
     except: return False
-
-def pause_until_ok():
-    # universele pauze: stopt motoren en wacht op OK
-    stop_now(); led_pause()
+def wait_ok():
     while not ok_pressed():
-        sleep_ms(40)
+        led_wait()
+        try: alvik.brake()
+        except: pass
+        sleep_ms(50)
     sleep_ms(120)  # kleine debounce
-    led_go()
+def pause_until_ok():
+    stop_now(); led_pause()
+    while not ok_pressed(): sleep_ms(40)
+    sleep_ms(120); led_go()
 
-# --- Motion ---
+# -------------- Motion ---------------
 def stop_now():
     try: alvik.set_wheels_speed(0,0); alvik.brake()
     except: pass
@@ -59,20 +71,9 @@ def forward(v):
     try: alvik.set_wheels_speed(L,R)
     except: pass
 
-# --- Distance (optioneel; hier niet nodig) ---
-def get_distance_cm():
-    for fn in ("get_distance","get_distance_cm","get_front_distance","get_ultrasonic_cm","get_tof_cm"):
-        try:
-            d=getattr(alvik,fn)()
-            if isinstance(d,(int,float)): return float(d)
-            if isinstance(d,dict):
-                for k in ("cm","distance","front","tof"):
-                    if k in d and isinstance(d[k],(int,float)): return float(d[k])
-        except: pass
-    return None
-
-# --- Pitch (euler → accel fallback) ---
+# ----------- IMU helpers -------------
 def _raw_pitch():
+    # Probeer euler; anders accel → pitch (graden)
     for fn in ("get_euler","get_orientation"):
         try:
             e=getattr(alvik,fn)()
@@ -104,11 +105,24 @@ def get_pitch_deg():
     p = -p   # <<< BELANGRIJK: jouw IMU-as is omgekeerd (positief = omhoog)
     return p
 
-# ================== Fases ==================
+def get_pitch_and_gyro():
+    """(pitch_deg, gx, gy, gz) — gyro kan None zijn als niet beschikbaar."""
+    p = get_pitch_deg()
+    gx=gy=gz=None
+    try:
+        imu=alvik.get_imu()
+        if isinstance(imu,(tuple,list)) and len(imu)>=6:
+            gx,gy,gz=float(imu[3]),float(imu[4]),float(imu[5])
+        elif isinstance(imu,dict):
+            gx=float(imu.get("gx",0.0)); gy=float(imu.get("gy",0.0)); gz=float(imu.get("gz",0.0))
+    except: pass
+    return p,gx,gy,gz
+
+# ================== Fase 1: midden ==================
 def go_to_middle_and_blink():
     """
-    Heuvel op -> zodra midden (heel kort vlak) wordt gezien: stop + korte knipper.
-    Knoppen werken altijd: CANCEL pauzeert, OK hervat.
+    Heuvel op → bij kort vlak midden: stop + 3x kort knipperen (wit), dan door.
+    Knoppen werken altijd.
     """
     led_go(); forward(SPEED_UP)
     climbing=False; flat=0; crest=False
@@ -118,7 +132,6 @@ def go_to_middle_and_blink():
 
         p=get_pitch_deg(); dp=p-(prev if prev is not None else p)
 
-        # klimmen markeren + snelheid regelen
         if p>=UP_MIN_DEG: climbing=True
         forward(SPEED_UP_SLOW if p>=UP_SLOW_DEG else SPEED_UP)
 
@@ -130,63 +143,78 @@ def go_to_middle_and_blink():
         # midden-criteria
         mid=False
         if climbing and abs(p)<=MID_ZERO_DEG:
-            flat += 1
+            flat+=1
             if flat>=MID_STABLE_SAMPLES: mid=True
         else:
-            flat = 0
+            flat=0
         if crest and ticks_diff(ticks_ms(),t_crest)<=MID_WINDOW_MS and abs(p)<=MID_ZERO_DEG:
             mid=True
 
         if mid:
             stop_now()
-            # 3x kort knipperen, daarna meteen door naar volgende fase
-            for _ in range(3):
-                led_done(); sleep_ms(100)
-                led_go();  sleep_ms(100)
-            return  # door naar infinite run
+            for _ in range(3):  # kort vieren, daarna meteen door
+                led_done(); sleep_ms(100); led_go(); sleep_ms(100)
+            return
 
         prev=p; sleep_ms(SAMPLE_DT_MS)
 
-def infinite_run_until_final_flat():
+# ======== Fase 2: eindeloos rijden tot robuust vlak ========
+def run_until_final_flat_robust():
     """
-    Na midden blijft hij eindeloos vooruit rijden.
-    Jij tilt 'm op en zet 'm vlak op tafel: bij stabiel 'vlak' stop + knipper.
+    Na midden: rij eindeloos vooruit.
+    Stop pas als:
+      - we eerst 'echt' hebben afgedaald (arm),
+      - en daarna 'stabiel vlak' op tafel zien (pitch ~0°, |dp| klein, gyro rustig).
     """
     led_go(); forward(SPEED_DOWN)
-    flat=0
-    t_start=ticks_ms()
+
+    # 1) armen op afdalen
+    armed=False; desc_cnt=0
+
+    # 2) vlak-detectie met stabiliteit
+    stable_cnt=0
+    prev_p,_,_,_=get_pitch_and_gyro()
+
     while True:
         if cancel_pressed(): pause_until_ok(); forward(SPEED_DOWN)
 
-        p=get_pitch_deg()
-        # pas vlak accepteren na een korte minimale tijd (voorkomt direct retrigger)
-        if ticks_diff(ticks_ms(), t_start) >= FINAL_MIN_MS and abs(p)<=FINAL_ZERO_DEG:
-            flat += 1
+        p,gx,gy,gz = get_pitch_and_gyro()
+        dp = p - (prev_p if prev_p is not None else p)
+
+        # afdalen-arm
+        if p <= -DESC_MIN_DEG:
+            desc_cnt += 1
         else:
-            flat = 0
+            if desc_cnt>0: desc_cnt -= 1
+        if not armed and desc_cnt >= DESC_SAMPLES_ARM:
+            armed=True
 
-        if flat >= FINAL_STABLE_SAMPLES:
-            stop_now()
-            # eind-knipper en AAN blijven (geen shutdown)
-            for _ in range(4):
-                led_done(); sleep_ms(120)
-                led_go();  sleep_ms(120)
-            return
+        # stabiel vlak (alleen als armed)
+        if armed:
+            still_ok = abs(dp) <= DERIV_EPS
+            gyro_ok = True
+            if gx is not None and gy is not None and gz is not None:
+                gyro_ok = (abs(gx)+abs(gy)+abs(gz)) <= GYRO_STILL_DPS
 
+            if (abs(p) <= FINAL_ZERO_DEG) and still_ok and gyro_ok:
+                stable_cnt += 1
+            else:
+                stable_cnt = 0
+
+            if stable_cnt >= FINAL_STABLE_SAMPLES:
+                stop_now()
+                # eindfeedback en AAN blijven
+                for _ in range(4):
+                    led_done(); sleep_ms(120); led_go(); sleep_ms(120)
+                return
+
+        prev_p=p
         sleep_ms(SAMPLE_DT_MS)
 
-# ================== MAIN ==================
-def wait_ok():
-    while not ok_pressed():
-        led_wait()
-        try: alvik.brake()
-        except: pass
-        sleep_ms(50)
-    sleep_ms(120)  # debounce
-
+# ======================== MAIN ========================
 led_wait(); wait_ok()
 try:
-    go_to_middle_and_blink()       # fase 1: midden vinden
-    infinite_run_until_final_flat()# fase 2: oneindig rijden tot vlak op tafel
+    go_to_middle_and_blink()       # Fase 1: midden
+    run_until_final_flat_robust()  # Fase 2: nette eind-detectie
 except KeyboardInterrupt:
     stop_now(); led_go()
