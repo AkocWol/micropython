@@ -1,77 +1,60 @@
-# === main.py — Levelmenu met ArduinoAlvik touch knoppen (OK=volgende, CANCEL=start) ===
+# === main.py — Levelmenu (OK=volgende, CANCEL=start) ===
 import uos, time, sys
 from arduino_alvik import ArduinoAlvik
 
 # --- Robot starten ---
 alvik = ArduinoAlvik()
-alvik.begin()
+alvik.begin()  # motoren, leds, sensoren klaar
 
-# --- Kleuren voor terminal ---
+# --- Terminalkleuren (alleen voor weergave) ---
 CLR_RESET  = "\x1b[0m"
 CLR_GREEN  = "\x1b[32m"
-CLR_ORANGE = "\x1b[38;5;208m"   # 256-kleuren oranje
+CLR_ORANGE = "\x1b[38;5;208m"
 CLR_RED    = "\x1b[31m"
-CLR_GRAY   = "\x1b[90m"         # grijs (bright black)
+CLR_GRAY   = "\x1b[90m"
 
 def color_for_level(name: str) -> str:
-   """
-    Kies een terminalkleur op basis van de bestandsnaam.
-    Handig voor snel zien welk level geselecteerd is in de REPL/seriële monitor.
-    """
+    """Kleur per levelnaam (alleen terminal)."""
     n = name.lower()
     if "level_1" in n: return CLR_GREEN
     if "level_2" in n: return CLR_ORANGE
     if "level_3" in n: return CLR_RED
-    return ""  # geen kleur voor andere namen
+    return ""
 
-# --- LED helpers ---
+# --- LEDs ---
 def _set_led_rgb(r, g, b):
-    """Probeert de LEDs te zetten; accepteert ints (0-255) of floats (0..1)."""
+    """Zet beide leds; probeer RGB, anders 0/1 fallback."""
     try:
         alvik.left_led.set_color(r, g, b)
         alvik.right_led.set_color(r, g, b)
     except:
-        # fallback naar binaire waarden
         try:
             alvik.left_led.set_color(1 if r else 0, 1 if g else 0, 1 if b else 0)
             alvik.right_led.set_color(1 if r else 0, 1 if g else 0, 1 if b else 0)
         except:
             pass
 
-def led_idle():
-    # neutraal blauw in menu-idle
-    _set_led_rgb(0, 0, 1)
-
-def led_run():
-    _set_led_rgb(0, 1, 0)
-
-def led_error():
-    _set_led_rgb(1, 0, 0)
+def led_idle():  _set_led_rgb(0, 0, 1)  # blauw = menu
+def led_run():   _set_led_rgb(0, 1, 0)  # groen = level draait
+def led_error(): _set_led_rgb(1, 0, 0)  # rood  = fout
 
 def led_menu_for_level(name: str):
-    """Kleur LEDs per level in het MENU."""
+    """Menu-LED: L1 groen, L2 oranje/geel, L3 rood, anders blauw."""
     n = name.lower()
-    if "level_1" in n:
-        _set_led_rgb(0, 1, 0)          # groen
+    if   "level_1" in n: _set_led_rgb(0, 1, 0)
     elif "level_2" in n:
-        try:
-            _set_led_rgb(1.0, 0.5, 0.0) # oranje (als floats werken)
-        except:
-            _set_led_rgb(1, 1, 0)       # fallback: geel
-    elif "level_3" in n:
-        _set_led_rgb(1, 0, 0)          # rood
-    else:
-        led_idle()
+        try: _set_led_rgb(1.0, 0.5, 0.0)   # oranje (floats)
+        except: _set_led_rgb(1, 1, 0)      # geel (fallback)
+    elif "level_3" in n: _set_led_rgb(1, 0, 0)
+    else:                led_idle()
 
 # --- Touchknoppen ---
-def ok_now():
-    return bool(alvik.get_touch_ok())
+def ok_now():     return bool(alvik.get_touch_ok())
+def cancel_now(): return bool(alvik.get_touch_cancel())
 
-def cancel_now():
-    return bool(alvik.get_touch_cancel())
-
-# --- Levels ophalen ---
+# --- Levels zoeken ---
 def get_levels():
+    """Alle 'level_*.py' (excl. main/boot) in alfabetische volgorde."""
     levels = []
     for f in uos.listdir():
         if f.startswith("level_") and f.endswith(".py") and f not in ("main.py", "boot.py"):
@@ -79,8 +62,9 @@ def get_levels():
     levels.sort()
     return levels
 
-# --- Menu tonen (gekleurde selectie, grijze rest) ---
+# --- Menu tonen ---
 def show_menu(levels, idx):
+    """Toon selectie in kleur, rest grijs (venster tot 7 regels)."""
     print("\n=== Kies een level (OK=volgende, CANCEL=start) ===")
     print("  [L1=groen, L2=oranje, L3=rood]")
 
@@ -106,6 +90,7 @@ def show_menu(levels, idx):
 
 # --- Level uitvoeren ---
 def run_level(filename):
+    """Lees en voer levelbestand uit; altijd remmen bij einde."""
     print("\n> Start:", filename)
     led_run()
     try:
@@ -118,26 +103,22 @@ def run_level(filename):
         led_error()
         print("[!] Fout:", e)
     finally:
-        try:
-            alvik.brake()
-        except:
-            pass
-    print("\n[OK] Level beeindigd - terug naar menu\n")
+        try: alvik.brake()
+        except: pass
+    print("\n[OK] Level beëindigd - terug naar menu\n")
     led_idle()
 
-# --- Level kiezen met edge-detectie + LED feedback in menu ---
+# --- Level kiezen (edge-detectie) ---
 def choose_level(levels):
+    """OK = volgende; CANCEL = start. Reageer 1x per tik (edge)."""
     i = 0
     last_shown = -1
 
-    # voorkom auto-actie als vingers nog op touch zitten
+    # eerst vingers los (geen spookinput)
     while ok_now() or cancel_now():
         time.sleep_ms(20)
 
-    # Eerst scherm + LED voor beginselectie
     led_menu_for_level(levels[i])
-
-    # Edge-detectie
     prev_ok = ok_now()
     prev_cancel = cancel_now()
 
@@ -149,26 +130,23 @@ def choose_level(levels):
         cur_ok = ok_now()
         cur_cancel = cancel_now()
 
-        # OK edge -> volgende (bladeren)
-        if cur_ok and not prev_ok:
+        if cur_ok and not prev_ok:            # volgende level
             i = (i + 1) % len(levels)
-            led_menu_for_level(levels[i])  # LED kleur live met selectie
+            led_menu_for_level(levels[i])
             show_menu(levels, i)
 
-        # CANCEL edge -> START huidige
-        if cur_cancel and not prev_cancel:
+        if cur_cancel and not prev_cancel:     # start huidige
             return levels[i]
 
-        prev_ok = cur_ok
-        prev_cancel = cur_cancel
-        time.sleep_ms(25)
+        prev_ok, prev_cancel = cur_ok, cur_cancel
+        time.sleep_ms(25)  # simpele debounce
 
 # --- Hoofdprogramma ---
 def main():
     levels = get_levels()
     if not levels:
         led_error()
-        print("[!] Geen level_*.py bestanden gevonden in root van het device.")
+        print("[!] Geen level_*.py bestanden gevonden.")
         return
 
     led_idle()
@@ -182,8 +160,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("Stop.")
-        try:
-            alvik.stop()
-        except:
-            pass
+        try: alvik.stop()
+        except: pass
         sys.exit()
