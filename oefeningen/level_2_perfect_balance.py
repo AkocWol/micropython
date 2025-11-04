@@ -1,4 +1,6 @@
-# ==== Alvik Level 2 — Straight + Buttons + Robust Final Flat (no timers/cm) ====
+# ==== Level 2 – Perfect Balance ====
+# Rijdt over de kantelbrug: stopt in het midden, knippert, daalt af en stopt op vlakke tafel.
+
 _time=__import__('time'); _math=__import__('math')
 sleep_ms=_time.sleep_ms; ticks_ms=_time.ticks_ms; ticks_diff=_time.ticks_diff
 atan2=_math.atan2; sqrt=_math.sqrt; pi=_math.pi
@@ -10,38 +12,28 @@ except NameError:
     alvik=ArduinoAlvik(); alvik.begin()
 
 # ===================== Tunables =====================
-DIR=1                 # 1=vooruit, -1=achteruit als jouw wiring zo is
-TRIM_L=0.0; TRIM_R=0.0
-
-# Snelheden & sampling
+DIR=1; TRIM_L=0.0; TRIM_R=0.0
 SPEED_UP=28; SPEED_UP_SLOW=20; SPEED_DOWN=24
 SAMPLE_DT_MS=15
 
-# Midden-detectie (korte vlak-zone)
-UP_MIN_DEG=4         # klimmen vanaf deze pitch
-UP_SLOW_DEG=10       # boven dit langzamer rijden (overshoot voorkomen)
-TILT_DROP_DEG=7      # plots daling markeert 'klap'
-MID_ZERO_DEG=5       # midden ~ |pitch| <= 5°
-MID_STABLE_SAMPLES=1 # 1 sample is genoeg (korte vlak-zone)
-MID_WINDOW_MS=900    # venster na crest/klap waarin zero telt
+# Midden-detectie
+UP_MIN_DEG=4; UP_SLOW_DEG=10; TILT_DROP_DEG=7
+MID_ZERO_DEG=5; MID_STABLE_SAMPLES=1; MID_WINDOW_MS=900
 
-# Robuuste eind-detectie (géén tijd/afstand)
-DESC_MIN_DEG=6            # afdalen pas 'echt' bij pitch <= -6°
-DESC_SAMPLES_ARM=4        # zoveel negatieve samples om te armen
-FINAL_ZERO_DEG=4          # vlak-venster voor tafel
-FINAL_STABLE_SAMPLES=5    # zoveel opeenvolgende 'stabiele' samples
-DERIV_EPS=0.6             # max |Δpitch|/sample (graden) voor 'stil'
-GYRO_STILL_DPS=8.0        # som |gx|+|gy|+|gz| dps (als gyro is) voor 'stil'
+# Robuuste eind-detectie
+DESC_MIN_DEG=6; DESC_SAMPLES_ARM=4
+FINAL_ZERO_DEG=4; FINAL_STABLE_SAMPLES=5
+DERIV_EPS=0.6; GYRO_STILL_DPS=8.0
 # ====================================================
 
 # ---------------- LEDs ----------------
 def _led(rgb):
     try: r,g,b=rgb; alvik.left_led.set_color(r,g,b); alvik.right_led.set_color(r,g,b)
     except: pass
-def led_wait():  _led((0,0,1))   # blauw
-def led_go():    _led((0,1,0))   # groen
-def led_pause(): _led((1,1,0))   # geel
-def led_done():  _led((1,1,1))   # wit
+def led_wait():  _led((0,0,1))
+def led_go():    _led((0,1,0))
+def led_pause(): _led((1,1,0))
+def led_done():  _led((1,1,1))
 
 # -------------- Buttons --------------
 def ok_pressed():
@@ -56,7 +48,7 @@ def wait_ok():
         try: alvik.brake()
         except: pass
         sleep_ms(50)
-    sleep_ms(120)  # kleine debounce
+    sleep_ms(120)
 def pause_until_ok():
     stop_now(); led_pause()
     while not ok_pressed(): sleep_ms(40)
@@ -73,7 +65,6 @@ def forward(v):
 
 # ----------- IMU helpers -------------
 def _raw_pitch():
-    # Probeer euler; anders accel → pitch (graden)
     for fn in ("get_euler","get_orientation"):
         try:
             e=getattr(alvik,fn)()
@@ -102,13 +93,11 @@ def _raw_pitch():
 
 def get_pitch_deg():
     p=_raw_pitch()
-    p = -p   # <<< BELANGRIJK: jouw IMU-as is omgekeerd (positief = omhoog)
+    p = -p   # jouw IMU-as is omgekeerd (positief = omhoog)
     return p
 
 def get_pitch_and_gyro():
-    """(pitch_deg, gx, gy, gz) — gyro kan None zijn als niet beschikbaar."""
-    p = get_pitch_deg()
-    gx=gy=gz=None
+    p=get_pitch_deg(); gx=gy=gz=None
     try:
         imu=alvik.get_imu()
         if isinstance(imu,(tuple,list)) and len(imu)>=6:
@@ -120,10 +109,6 @@ def get_pitch_and_gyro():
 
 # ================== Fase 1: midden ==================
 def go_to_middle_and_blink():
-    """
-    Heuvel op → bij kort vlak midden: stop + 3x kort knipperen (wit), dan door.
-    Knoppen werken altijd.
-    """
     led_go(); forward(SPEED_UP)
     climbing=False; flat=0; crest=False
     prev=get_pitch_deg()
@@ -131,16 +116,13 @@ def go_to_middle_and_blink():
         if cancel_pressed(): pause_until_ok(); forward(SPEED_UP)
 
         p=get_pitch_deg(); dp=p-(prev if prev is not None else p)
-
         if p>=UP_MIN_DEG: climbing=True
         forward(SPEED_UP_SLOW if p>=UP_SLOW_DEG else SPEED_UP)
 
-        # crest/klap arming
         if climbing and not crest:
             if dp<=-TILT_DROP_DEG or (prev is not None and prev>p):
                 crest=True; t_crest=ticks_ms()
 
-        # midden-criteria
         mid=False
         if climbing and abs(p)<=MID_ZERO_DEG:
             flat+=1
@@ -152,69 +134,56 @@ def go_to_middle_and_blink():
 
         if mid:
             stop_now()
-            for _ in range(3):  # kort vieren, daarna meteen door
+            for _ in range(3):
                 led_done(); sleep_ms(100); led_go(); sleep_ms(100)
             return
-
         prev=p; sleep_ms(SAMPLE_DT_MS)
 
-# ======== Fase 2: eindeloos rijden tot robuust vlak ========
+# ======== Fase 2: robuust vlak-einde ========
 def run_until_final_flat_robust():
-    """
-    Na midden: rij eindeloos vooruit.
-    Stop pas als:
-      - we eerst 'echt' hebben afgedaald (arm),
-      - en daarna 'stabiel vlak' op tafel zien (pitch ~0°, |dp| klein, gyro rustig).
-    """
     led_go(); forward(SPEED_DOWN)
-
-    # 1) armen op afdalen
-    armed=False; desc_cnt=0
-
-    # 2) vlak-detectie met stabiliteit
-    stable_cnt=0
+    armed=False; desc_cnt=0; stable_cnt=0
     prev_p,_,_,_=get_pitch_and_gyro()
 
     while True:
         if cancel_pressed(): pause_until_ok(); forward(SPEED_DOWN)
 
-        p,gx,gy,gz = get_pitch_and_gyro()
-        dp = p - (prev_p if prev_p is not None else p)
+        p,gx,gy,gz=get_pitch_and_gyro()
+        dp=p-(prev_p if prev_p is not None else p)
 
-        # afdalen-arm
-        if p <= -DESC_MIN_DEG:
-            desc_cnt += 1
+        if p<=-DESC_MIN_DEG:
+            desc_cnt+=1
         else:
-            if desc_cnt>0: desc_cnt -= 1
-        if not armed and desc_cnt >= DESC_SAMPLES_ARM:
+            if desc_cnt>0: desc_cnt-=1
+        if not armed and desc_cnt>=DESC_SAMPLES_ARM:
             armed=True
 
-        # stabiel vlak (alleen als armed)
         if armed:
-            still_ok = abs(dp) <= DERIV_EPS
-            gyro_ok = True
+            still_ok=abs(dp)<=DERIV_EPS
+            gyro_ok=True
             if gx is not None and gy is not None and gz is not None:
-                gyro_ok = (abs(gx)+abs(gy)+abs(gz)) <= GYRO_STILL_DPS
+                gyro_ok=(abs(gx)+abs(gy)+abs(gz))<=GYRO_STILL_DPS
 
-            if (abs(p) <= FINAL_ZERO_DEG) and still_ok and gyro_ok:
-                stable_cnt += 1
+            if (abs(p)<=FINAL_ZERO_DEG) and still_ok and gyro_ok:
+                stable_cnt+=1
             else:
-                stable_cnt = 0
+                stable_cnt=0
 
-            if stable_cnt >= FINAL_STABLE_SAMPLES:
+            if stable_cnt>=FINAL_STABLE_SAMPLES:
                 stop_now()
-                # eindfeedback en AAN blijven
                 for _ in range(4):
                     led_done(); sleep_ms(120); led_go(); sleep_ms(120)
                 return
-
-        prev_p=p
-        sleep_ms(SAMPLE_DT_MS)
+        prev_p=p; sleep_ms(SAMPLE_DT_MS)
 
 # ======================== MAIN ========================
-led_wait(); wait_ok()
-try:
-    go_to_middle_and_blink()       # Fase 1: midden
-    run_until_final_flat_robust()  # Fase 2: nette eind-detectie
-except KeyboardInterrupt:
-    stop_now(); led_go()
+def main():
+    led_wait(); wait_ok()
+    try:
+        go_to_middle_and_blink()
+        run_until_final_flat_robust()
+    except KeyboardInterrupt:
+        stop_now(); led_go()
+
+if __name__=="__main__":
+    main()
